@@ -1,0 +1,178 @@
+#!/usr/bin/perl
+use strict;
+use String::ShellQuote 'shell_quote';
+use Cwd;
+use File::Which;
+use Getopt::Std::Strict 't:b:l:r:T:nhv';
+
+our $VERSION = sprintf "%d.%02d", q$Revision: 1.4 $ =~ /(\d+)/g;
+
+# are they asking for help or version of command?
+$opt_h and ( print STDERR usage() ) and exit;
+$opt_v and print $VERSION and exit;
+
+
+
+
+# make sure we have path to ImageMagick mogrify on system..
+my $mogrify_bin = File::Which::which('mogrify') 
+   or die("Can't find which 'mogrify', is ImageMagick installed on this system?");
+
+
+
+# what are the file args
+my @files;
+@ARGV or die("missing arguments\n");
+for (@ARGV){
+   my $abs = Cwd::abs_path($_) or die("Can't find abs path to '$_', not on disk?\n");
+   -f $abs or die("Not file on disk: $abs\n");
+   push @files, $abs;
+}
+
+# made sure we did have files as args..
+scalar @files or die("missing file arguments\n");
+
+
+# what's the bare bones command ?
+my @cmd = cmd();
+
+
+# if they want to only see what the command is.. 
+# then print as if we are doing it for each file sepparately
+if ($opt_n){
+   for (@files){
+      my $p = shell_quote($_);
+      print "@cmd $p\n";
+   }
+   exit;
+}
+
+
+# in actual production, go ahead and run command for all files together
+push @cmd, @files;
+system(@cmd) == 0 
+   or die("failed command, $? - command was:\n@cmd");
+
+exit;
+
+
+# this is a subroutine to consolidate what the command would be
+# this leaves out the actual file arg we are doing this to..
+sub cmd {
+
+   if ( $opt_T ){
+      map { $OPT{$_} = $opt_T } qw(t b l r);
+   }
+
+   $opt_t + $opt_b + $opt_l + $opt_r or die('missing arguments');
+   
+   my @cmd = ( $mogrify_bin );
+
+   ( push @cmd, '-gravity', 'north', '-chop', "0x$opt_t" ) if $opt_t;
+   ( push @cmd, '-gravity', 'south', '-chop', "0x$opt_b" ) if $opt_b;
+   ( push @cmd, '-gravity', 'west',  '-chop', $opt_l."x0" ) if $opt_l;
+   ( push @cmd, '-gravity', 'east',  '-chop', $opt_r."x0" ) if $opt_r;
+
+   return @cmd;
+}
+
+
+
+# this prints usage to screen if user asks for help
+sub usage {
+   q{imgtrim [OPTION] IMAGE..
+Trim sides of IMAGE.
+
+   -t number      top
+   -b number      bottom
+   -l number      left
+   -r number      right
+   -T number      overall trim
+   -h             help
+   -v             version
+   -n             don't do it, just print the command to stdout
+
+Try 'man imgtrim' for more info'.
+}
+}
+
+
+
+# everything below is pod documentation, it is called
+# when user runs command 'man imgtrim'- only available if 
+# this has already been installed
+# you can also see "inline" documentation for a script like this
+# by running the command 'perldoc ./bin/imgtrim'
+
+__END__
+
+=pod
+
+=head1 NAME
+
+imgtrim - Trim sides of IMAGE.
+
+=head1 USAGE
+
+imgtrim [OPTION] IMAGE..
+
+   -t number      top
+   -b number      bottom
+   -l number      left
+   -r number      right
+   -T number      overall trim
+   -d             debug
+   -h             help
+   -v             version
+
+=head1 USAGE EXAMPLES
+
+Trim 100 pixels from top
+   imgtrim -t 100 ./img.jpg
+
+Trim 210 pixels from bottom and 50 from top
+   imgtrim -b 210 -t 50 ./img.jpg
+
+Trim 50 pixels from all sides
+   imgtrim -T 50 ./img.jpg
+
+=head1 DESCRIPTION
+
+I work off and on with scans of images clients send me. Sometimes they need to be
+trimmed up on sides, for example. The images are sometimes very large, and I don't want
+to have to open 5MB jpeg files in gimp to trim 100 pixels off the top.
+So with this command, I can simply say, trim 100 pixels off top of this image.
+
+Wait, but.. you could do this in imagemagick's mogrify and convert! you say. Yes- this
+command uses convert in the background.
+But the thing is tailored to trim- which has saved me a good deal of time.
+
+=head1 CAVEATS
+
+Uses mogrify, alters original image.
+
+=head1 REQUIREMENTS
+
+You will need a posix environment.
+You will need ImageMagick mogrify installed.
+
+=head1 AUTHOR
+
+Leo Charre leocharre at cpan dot org
+
+=head1 COPYRIGHT
+
+Copyright (c) 2010 Leo Charre. All rights reserved.
+
+=head1 LICENSE
+
+This package is free software; you can redistribute it and/or modify it under the same terms as Perl itself, i.e., under the terms of the "Artistic License" or the "GNU General Public License".
+
+=head1 DISCLAIMER
+
+This package is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+See the "GNU General Public License" for more details.
+
+=cut
+
